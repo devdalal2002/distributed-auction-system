@@ -1,0 +1,12 @@
+fastapi==0.115.2
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+asyncpg==0.29.0
+redis==5.0.7
+nats-py==2.7.2
+python-dotenv==1.0.1
+grpcio==1.66.1
+protobuf==5.28.2
+# optional (only needed if you generate stubs inside the image)
+grpcio-tools==1.66.1
+

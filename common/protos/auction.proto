@@ -1,0 +1,28 @@
+syntax = "proto3";
+package auctionpb;
+
+message Auction {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  double start_price = 4;
+  string status = 5; // open, closed
+  int64 end_at_unix = 6; // seconds since epoch
+  double highest_amount = 7;
+  string highest_bidder_id = 8;
+}
+
+message CreateAuctionRequest { string title = 1; string description = 2; double start_price = 3; int64 end_at_unix = 4; }
+message CreateAuctionResponse { Auction auction = 1; }
+
+message GetAuctionRequest { string id = 1; }
+message GetAuctionResponse { Auction auction = 1; }
+
+message CloseAuctionRequest { string id = 1; }
+message CloseAuctionResponse { Auction auction = 1; }
+
+service AuctionService {
+  rpc CreateAuction(CreateAuctionRequest) returns (CreateAuctionResponse);
+  rpc GetAuction(GetAuctionRequest) returns (GetAuctionResponse);
+  rpc CloseAuction(CloseAuctionRequest) returns (CloseAuctionResponse);
+}
