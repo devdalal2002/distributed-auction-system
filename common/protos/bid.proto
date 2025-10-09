@@ -1,9 +1,0 @@
-syntax = "proto3";
-package bidpb;
-
-message PlaceBidRequest { string auction_id = 1; string bidder_id = 2; double amount = 3; string idempotency_key = 4; }
-message PlaceBidResponse { bool accepted = 1; double highest_amount = 2; string highest_bidder_id = 3; }
-
-service BidService {
-  rpc PlaceBid(PlaceBidRequest) returns (PlaceBidResponse);
-}
