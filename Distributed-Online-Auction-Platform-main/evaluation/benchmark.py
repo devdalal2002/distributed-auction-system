@@ -1,101 +1,106 @@
-"""Enhanced benchmarking helper for the auction gateway with detailed metrics."""
-
-import json
-import os
-import sys
+import requests
 import time
-from statistics import mean
-from urllib import error, request
+import sys
+import os
+import threading
+import statistics
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# Get BASE_URL from command line or environment
+BASE_URL = sys.argv[1] if len(sys.argv) > 1 else os.getenv('BASE_URL', 'http://localhost:8000')
 
-def _handle_http_error(exc: error.HTTPError):
-    body = exc.read().decode("utf-8", "ignore")
+# Correct API endpoints based on gateway
+CREATE_AUCTION_URL = f"{BASE_URL}/api/auctions"
+VIEW_AUCTIONS_URL = f"{BASE_URL}/api/auctions"
+VIEW_HISTORY_URL = f"{BASE_URL}/api/history"
+
+auction_ids = []
+
+def create_auction():
+    data = {"name": "Test Item", "description": "Test", "starting_bid": 10.0, "duration_seconds": 3600}
+    start = time.time()
     try:
-        parsed = json.loads(body) if body else {}
-    except json.JSONDecodeError:
-        parsed = {"error": body.strip()}
-    message = parsed.get("error") or parsed.get("message") or exc.reason
-    raise RuntimeError(f"{exc.code} {exc.reason} for {exc.url}: {message}") from exc
+        response = requests.post(CREATE_AUCTION_URL, json=data)
+        response.raise_for_status()
+        resp = response.json()
+        auction_id = resp.get("auction", {}).get("id")
+        if auction_id:
+            auction_ids.append(auction_id)
+        return time.time() - start
+    except Exception as e:
+        print(f"Error creating auction: {e}")
+        return None
 
-
-def call(url, payload):
-    data = json.dumps(payload).encode("utf-8")
-    req = request.Request(url, data=data, method="POST")
-    req.add_header("Content-Type", "application/json")
+def place_bid():
+    if not auction_ids:
+        return None
+    auction_id = auction_ids[-1]  # Use the last created
+    data = {"bidder": "user1", "amount": 15.0}
+    url = f"{BASE_URL}/api/auctions/{auction_id}/bid"
+    start = time.time()
     try:
-        with request.urlopen(req) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except error.HTTPError as exc:
-        _handle_http_error(exc)
-    except error.URLError as exc:
-        raise RuntimeError(f"Failed to reach {url}: {exc.reason}") from exc
+        response = requests.post(url, json=data)
+        response.raise_for_status()
+        return time.time() - start
+    except Exception as e:
+        print(f"Error placing bid: {e}")
+        return None
 
-
-def get(url):
+def view_auctions():
+    start = time.time()
     try:
-        with request.urlopen(url) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except error.HTTPError as exc:
-        _handle_http_error(exc)
-    except error.URLError as exc:
-        raise RuntimeError(f"Failed to reach {url}: {exc.reason}") from exc
+        response = requests.get(VIEW_AUCTIONS_URL)
+        response.raise_for_status()
+        return time.time() - start
+    except Exception as e:
+        print(f"Error viewing auctions: {e}")
+        return None
 
+def view_history():
+    start = time.time()
+    try:
+        response = requests.get(VIEW_HISTORY_URL)
+        response.raise_for_status()
+        return time.time() - start
+    except Exception as e:
+        print(f"Error viewing history: {e}")
+        return None
 
-def _normalize_base_url(raw: str) -> str:
-    candidate = raw.strip()
-    if not candidate:
-        raise RuntimeError("Base URL cannot be empty")
-    # Allow passing an environment variable name such as BASE_URL
-    env_value = os.getenv(candidate)
-    if env_value:
-        candidate = env_value
-    if not candidate.lower().startswith("http"):
-        if candidate.upper() == candidate and not env_value:
-            raise RuntimeError(
-                f"Provide a concrete base URL (e.g. http://localhost:8080) instead of the placeholder '{raw}'."
-            )
-        candidate = f"http://{candidate}"
-    return candidate.rstrip("/")
-
-
-def run(base_url: str, iterations: int = 100):
-    base = _normalize_base_url(base_url)
+def run_benchmark(num_requests=100, concurrency=10):
     latencies = []
-    success_count = 0
-    for idx in range(iterations):
-        start = time.time()
-        try:
-            create = call(f"{base}/api/auctions", {
-                "name": f"Load Test Item {idx}",
-                "description": "Benchmark item",
-                "starting_bid": 10 + idx,
-                "duration_seconds": 120,
-            })
-            auction_id = create.get("auction", {}).get("id")
-            if not auction_id:
-                raise RuntimeError("Auction creation did not return an id")
-            call(f"{base}/api/auctions/{auction_id}/bid", {"bidder": "bot", "amount": 20 + idx})
-            call(f"{base}/api/auctions/{auction_id}/close", {})
-            get(f"{base}/api/history")
-            latency = time.time() - start
-            latencies.append(latency)
-            success_count += 1
-        except RuntimeError as exc:
-            print(f"Iteration {idx + 1} failed: {exc}")
-            break
-    if not latencies:
-        print("No successful iterations were recorded.")
-        return
-    throughput = success_count / sum(latencies)
-    print(f"Total Successful Requests: {success_count}")
-    print(f"Average Latency: {mean(latencies)*1000:.1f} ms")
-    print(f"Min Latency: {min(latencies)*1000:.1f} ms")
-    print(f"Max Latency: {max(latencies)*1000:.1f} ms")
-    print(f"Throughput: {throughput:.2f} requests/second")
+    start_time = time.time()
 
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        futures = []
+        for i in range(num_requests):
+            if i % 4 == 0:
+                futures.append(executor.submit(create_auction))
+            elif i % 4 == 1:
+                futures.append(executor.submit(place_bid))
+            elif i % 4 == 2:
+                futures.append(executor.submit(view_auctions))
+            else:
+                futures.append(executor.submit(view_history))
+
+        for future in as_completed(futures):
+            latency = future.result()
+            if latency is not None:
+                latencies.append(latency)
+
+    total_time = time.time() - start_time
+    throughput = len(latencies) / total_time if total_time > 0 else 0
+
+    if latencies:
+        avg_latency = statistics.mean(latencies)
+        min_latency = min(latencies)
+        max_latency = max(latencies)
+        print(f"Total requests: {len(latencies)}")
+        print(f"Average latency: {avg_latency:.4f} seconds")
+        print(f"Min latency: {min_latency:.4f} seconds")
+        print(f"Max latency: {max_latency:.4f} seconds")
+        print(f"Throughput: {throughput:.2f} requests/second")
+    else:
+        print("No successful requests")
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage: python benchmark.py <base_url>")
-        sys.exit(1)
-    run(sys.argv[1])
+    run_benchmark()
