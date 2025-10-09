@@ -1,4 +1,4 @@
-"""Lightweight benchmarking helper for the auction gateway."""
+"""Enhanced benchmarking helper for the auction gateway with detailed metrics."""
 
 import json
 import os
@@ -58,9 +58,10 @@ def _normalize_base_url(raw: str) -> str:
     return candidate.rstrip("/")
 
 
-def run(base_url: str, iterations: int = 5):
+def run(base_url: str, iterations: int = 100):
     base = _normalize_base_url(base_url)
     latencies = []
+    success_count = 0
     for idx in range(iterations):
         start = time.time()
         try:
@@ -76,16 +77,21 @@ def run(base_url: str, iterations: int = 5):
             call(f"{base}/api/auctions/{auction_id}/bid", {"bidder": "bot", "amount": 20 + idx})
             call(f"{base}/api/auctions/{auction_id}/close", {})
             get(f"{base}/api/history")
-            latencies.append(time.time() - start)
+            latency = time.time() - start
+            latencies.append(latency)
+            success_count += 1
         except RuntimeError as exc:
             print(f"Iteration {idx + 1} failed: {exc}")
             break
     if not latencies:
         print("No successful iterations were recorded.")
         return
-    throughput = len(latencies) / sum(latencies)
-    print(f"Latency avg: {mean(latencies):.4f}s")
-    print(f"Throughput: {throughput:.2f} ops/s")
+    throughput = success_count / sum(latencies)
+    print(f"Total Successful Requests: {success_count}")
+    print(f"Average Latency: {mean(latencies)*1000:.1f} ms")
+    print(f"Min Latency: {min(latencies)*1000:.1f} ms")
+    print(f"Max Latency: {max(latencies)*1000:.1f} ms")
+    print(f"Throughput: {throughput:.2f} requests/second")
 
 
 if __name__ == "__main__":
@@ -93,4 +99,3 @@ if __name__ == "__main__":
         print("Usage: python benchmark.py <base_url>")
         sys.exit(1)
     run(sys.argv[1])
-
