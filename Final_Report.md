@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This report details the design, implementation, and evaluation of a distributed online auction platform. The system supports real-time bidding and auction management across multiple nodes. Two distinct architectures were implemented: one in Go using gRPC and one in Python using HTTP. The project demonstrates distributed system concepts including microservices, communication models, containerization, and performance evaluation.
+This report details the design, implementation, and evaluation of a distributed online auction platform. The system supports real-time bidding and auction management across multiple nodes. Two distinct architectures were implemented: one microservice in Go using gRPC and one layered in Python using HTTP. The project demonstrates distributed system concepts including microservices, layered architecture, communication models, containerization, and performance evaluation.
 
 ## System Overview
 
@@ -30,9 +30,9 @@ The system supports the following five functional requirements:
 - **Containerization**: Each service is containerized using Docker, allowing deployment on at least 5 nodes.
 - **Support for Requirements**: Each service handles a specific aspect (e.g., Auction service for requirement 1, Bidding for 2), ensuring scalability and fault isolation.
 
-### Architecture 2: Python Microservices with HTTP
+### Architecture 2: Python Layered with HTTP
 
-- **Design**: Microservice architecture implemented in Python. Services are lightweight and communicate via RESTful HTTP APIs.
+- **Design**: Layered architecture implemented in Python. Services are organized in layers and communicate via RESTful HTTP APIs.
 - **Services**:
   - Auction Service: Manages auction creation.
   - Bidding Service: Handles bid placement.
